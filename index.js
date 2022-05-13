@@ -3,6 +3,9 @@ const app = express();
 const port = 3000;
 const mysql = require("mysql2");
 
+// Agar dapat membaca content body JSON
+app.use(express.json());
+
 const connection = mysql.createPool({
   connectionLimit: 10,
   host: "localhost",
@@ -13,10 +16,10 @@ const connection = mysql.createPool({
 });
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send({ err: false, msg: "Hello World!" });
 });
 
-app.get("/test", (req, res) => {
+app.get("/persons", (req, res) => {
   connection.query("SELECT * from person", (err, rows) => {
     if (err) {
       res.send({ msg: err.message, err: true });
@@ -28,6 +31,83 @@ app.get("/test", (req, res) => {
       return;
     }
   });
+});
+
+//get person data by id
+app.get("/person/:id", (req, res) => {
+  let id = req.params.id;
+  connection.query("SELECT * from person where id=?", [id], (err, rows) => {
+    if (err) {
+      res.send({ msg: err.message, err: true });
+      return;
+    }
+    if (rows.length > 0) {
+      let response = { err: false, msg: "Success", data: rows };
+      res.send(response);
+      return;
+    } else {
+      res.send({ msg: "Data not found", err: true });
+      return;
+    }
+  });
+});
+
+//insert data person
+app.post("/register", (req, res) => {
+  let { lastName, firstName, Address, City } = req.body;
+
+  connection.query(
+    "INSERT INTO person (last_name, first_name, address, city) VALUES (?, ?, ?, ?)",
+    [lastName, firstName, Address, City],
+    (err, rows) => {
+      if (err) {
+        res.send({ msg: err.message, err: true });
+      }
+      if (rows) {
+        let response = { err: false, msg: "Success" };
+        res.send(response);
+      }
+    }
+  );
+  return;
+});
+
+//update data person
+app.put("/update/:id", (req, res) => {
+  let nomor = req.params.id;
+  let { lastName, firstName, Address, City } = req.body;
+
+  connection.query(
+    "update person set last_name=?, first_name=?, address=?, city=? where id=?",
+    [lastName, firstName, Address, City, nomor],
+    (err, rows) => {
+      if (err) {
+        res.send({ msg: err.message, err: true });
+      }
+      if (rows) {
+        let response = { err: false, msg: "Success" };
+        res.send(response);
+      }
+    }
+  );
+
+  return;
+});
+
+app.delete("/delete/:id", (req, res) => {
+  let id = req.params.id;
+
+  connection.query("delete from person where id=?", [id], (err, rows) => {
+    if (err) {
+      res.send({ msg: err.message, err: true });
+    }
+    // console.log(rows);
+    if (rows) {
+      let response = { err: false, msg: "Success" };
+      res.send(response);
+    }
+  });
+  return;
 });
 
 app.listen(port, () => {
