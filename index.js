@@ -20,14 +20,16 @@ app.get("/", (req, res) => {
 });
 
 app.get("/persons", (req, res) => {
-  connection.query("SELECT * from person", (err, rows) => {
+  let limit = req.query.limit || 100;
+
+  connection.query("SELECT * from person limit " + limit, (err, rows) => {
     if (err) {
       res.send({ msg: err.message, err: true });
       return;
     }
     if (rows.length > 0) {
       let response = { err: false, msg: "Success", data: rows };
-      res.send(response);
+      res.status(200).send(response);
       return;
     }
   });
