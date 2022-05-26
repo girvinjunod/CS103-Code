@@ -1,8 +1,14 @@
 const express = require("express");
 const morgan = require("morgan");
+const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
 const app = express();
 const port = 3000;
 const mysql = require("mysql2");
+
+const { generateAccessToken, authenticateToken } = require("./middleware/jwt");
+
+dotenv.config();
 
 //middleware
 // Agar dapat membaca content body JSON
@@ -20,11 +26,13 @@ const connection = mysql.createPool({
 });
 
 app.get("/", (req, res) => {
+  // console.log(generateAccessToken("username"));
   res.send({ err: false, msg: "Hello World!" });
 });
 
-app.get("/persons", (req, res) => {
+app.get("/persons", authenticateToken, (req, res) => {
   let limit = req.query.limit || 100;
+  console.log(req.user);
 
   connection.query("SELECT * from person limit " + limit, (err, rows) => {
     if (err) {
