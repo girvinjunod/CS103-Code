@@ -1,10 +1,14 @@
 const express = require("express");
+const morgan = require("morgan");
 const app = express();
 const port = 3000;
 const mysql = require("mysql2");
 
+//middleware
 // Agar dapat membaca content body JSON
 app.use(express.json());
+// request logging
+app.use(morgan("dev"));
 
 const connection = mysql.createPool({
   connectionLimit: 10,
@@ -113,5 +117,5 @@ app.delete("/delete/:id", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Example app listening on http://localhost:${port}`);
 });
