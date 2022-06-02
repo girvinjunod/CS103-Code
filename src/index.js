@@ -8,6 +8,9 @@ const app = express();
 const port = 3000;
 const mysql = require("mysql2");
 
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
 const { generateAccessToken, authenticateToken } = require("./middleware/jwt");
 
 dotenv.config();
@@ -31,55 +34,44 @@ app.get("/", (req, res) => {
   res.send({ err: false, msg: "Hello World!" });
 });
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   let username = req.body.username;
   let password = req.body.password;
-  connection.query(
-    "SELECT * from users where username=? limit 1",
-    [username],
-    (err, rows) => {
-      if (err || rows.length === 0) {
-        res.status(400).send({ msg: "Username doesn't exist", err: true });
-        return;
-      }
-      bcrypt.compare(password, rows[0].password, function (err, result) {
-        // result == true
-        if (result) {
-          let token = generateAccessToken(username);
-          let response = { err: false, msg: "Success", token: token };
-          res.status(200).send(response);
-          return;
-        } else {
-          res.status(400).send({ msg: "Wrong password", err: true });
-          return;
-        }
-      });
+  let users = await prisma.users.findMany({
+    where: { username: username },
+  });
+  if (users.length === 0) {
+    res.status(400).send({ msg: "Username doesn't exist", err: true });
+    return;
+  } else {
+    let compare = await bcrypt.compare(password, users[0].password);
+    if (compare) {
+      let token = generateAccessToken(username);
+      let response = { err: false, msg: "Success", token: token };
+      res.status(200).send(response);
+      return;
+    } else {
+      res.status(400).send({ msg: "Wrong password", err: true });
+      return;
     }
-  );
+  }
 });
 
 //insert data user
-app.post("/register", (req, res) => {
+app.post("/register", async (req, res) => {
   let { username, password } = req.body;
 
-  bcrypt.genSalt(saltRounds, function (err, salt) {
-    bcrypt.hash(password, salt, function (err, hash) {
-      // Store hash in your password DB.
-      connection.query(
-        "INSERT INTO users (username, password) VALUES (?, ?)",
-        [username, hash],
-        (err, rows) => {
-          if (err) {
-            res.send({ msg: err.message, err: true });
-          }
-          if (rows) {
-            let response = { err: false, msg: "Success" };
-            res.send(response);
-          }
-        }
-      );
-    });
+  let salt = await bcrypt.genSalt(saltRounds);
+  let hash = await bcrypt.hash(password, salt);
+  // Store hash in your password DB.
+  let result = await prisma.users.create({
+    data: {
+      username: username,
+      password: hash,
+    },
   });
+  res.send({ err: false, msg: "Success" });
+
   return;
 });
 
