@@ -6,7 +6,6 @@ const saltRounds = 10;
 const dotenv = require("dotenv");
 const app = express();
 const port = 3000;
-const mysql = require("mysql2");
 
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
@@ -20,14 +19,6 @@ dotenv.config();
 app.use(express.json());
 // request logging
 app.use(morgan("dev"));
-const connection = mysql.createPool({
-  connectionLimit: 10,
-  host: process.env.dbhost,
-  user: process.env.dbuser,
-  password: process.env.dbpassword,
-  database: process.env.dbname,
-  // port: 3340,
-});
 
 app.get("/", (req, res) => {
   // console.log(generateAccessToken("username"));
@@ -64,7 +55,7 @@ app.post("/register", async (req, res) => {
   let salt = await bcrypt.genSalt(saltRounds);
   let hash = await bcrypt.hash(password, salt);
   // Store hash in your password DB.
-  let result = await prisma.users.create({
+  await prisma.users.create({
     data: {
       username: username,
       password: hash,
@@ -75,77 +66,53 @@ app.post("/register", async (req, res) => {
   return;
 });
 
-app.get("/persons", authenticateToken, (req, res) => {
+app.get("/persons", authenticateToken, async (req, res) => {
   let limit = req.query.limit || 100;
 
-  connection.query("SELECT * from person limit " + limit, (err, rows) => {
-    if (err) {
-      res.send({ msg: err.message, err: true });
-      return;
-    }
-    if (rows.length > 0) {
-      let response = { err: false, msg: "Success", data: rows };
-      res.status(200).send(response);
-      return;
-    }
+  let ret = await prisma.person.findMany({
+    take: limit,
   });
+  return res.send({ err: false, msg: "Success", data: ret });
 });
 
 //get person data by id
-app.get("/person/:id", (req, res) => {
+app.get("/person/:id", async (req, res) => {
   let id = req.params.id;
-  connection.query("SELECT * from person where id=?", [id], (err, rows) => {
-    if (err) {
-      res.send({ msg: err.message, err: true });
-      return;
-    }
-    if (rows.length > 0) {
-      let response = { err: false, msg: "Success", data: rows };
-      res.send(response);
-      return;
-    } else {
-      res.send({ msg: "Data not found", err: true });
-      return;
-    }
+  let ret = await prisma.person.findUnique({
+    where: { id: id * 1 },
   });
+  if (ret) {
+    return res.send({ err: false, msg: "Success", data: ret });
+  } else {
+    return res.send({ err: true, msg: "Data not found" });
+  }
 });
 
 //update data person
-app.put("/update/:id", (req, res) => {
+app.put("/update/:id", async (req, res) => {
   let nomor = req.params.id;
   let { lastName, firstName, Address, City } = req.body;
 
-  connection.query(
-    "update person set last_name=?, first_name=?, address=?, city=? where id=?",
-    [lastName, firstName, Address, City, nomor],
-    (err, rows) => {
-      if (err) {
-        res.send({ msg: err.message, err: true });
-      }
-      if (rows) {
-        let response = { err: false, msg: "Success" };
-        res.send(response);
-      }
-    }
-  );
-
-  return;
+  await prisma.person.update({
+    where: { id: nomor },
+    data: {
+      last_name: lastName,
+      first_mame: firstName,
+      address: Address,
+      city: City,
+    },
+  });
+  return res.send({ err: false, msg: "Success" });
 });
 
-app.delete("/delete/:id", (req, res) => {
+app.delete("/delete/:id", async (req, res) => {
   let id = req.params.id;
 
-  connection.query("delete from person where id=?", [id], (err, rows) => {
-    if (err) {
-      res.send({ msg: err.message, err: true });
-    }
-    // console.log(rows);
-    if (rows) {
-      let response = { err: false, msg: "Success" };
-      res.send(response);
-    }
+  await prisma.person.delete({
+    where: { id: id },
   });
-  return;
+
+  return res.send({ err: false, msg: "Success" });
 });
 
 app.listen(port, () => {
