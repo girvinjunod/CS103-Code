@@ -66,6 +66,20 @@ app.post("/register", async (req, res) => {
   return;
 });
 
+app.post("/person/insert", authenticateToken, async (req, res) => {
+  await prisma.person.create({
+    data: {
+      last_name: req.body.lastName,
+      first_name: req.body.firstName,
+      address: req.body.address,
+      city: req.body.city,
+    },
+  });
+  res.send({ err: false, msg: "Success" });
+
+  return;
+});
+
 app.get("/persons", authenticateToken, async (req, res) => {
   let limit = req.query.limit || 100;
 
