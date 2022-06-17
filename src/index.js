@@ -1,11 +1,11 @@
 const express = require("express");
 const morgan = require("morgan");
-// const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
 const dotenv = require("dotenv");
 const app = express();
 const port = process.env.PORT || 3000;
+const path = require("path");
 
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
@@ -15,120 +15,274 @@ const { generateAccessToken, authenticateToken } = require("./middleware/jwt");
 dotenv.config();
 
 //middleware
-// Agar dapat membaca content body JSON
 app.use(express.json());
 // request logging
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  // console.log(generateAccessToken("username"));
-  res.send({ err: false, msg: "Hello World!" });
+  res.send({ err: false, msg: "OK" });
 });
 
 app.post("/login", async (req, res) => {
   let username = req.body.username;
   let password = req.body.password;
-  let users = await prisma.users.findMany({
-    where: { username: username },
-  });
-  if (users.length === 0) {
-    res.status(400).send({ msg: "Username doesn't exist", err: true });
-    return;
-  } else {
-    let compare = await bcrypt.compare(password, users[0].password);
-    if (compare) {
-      let token = generateAccessToken(username);
-      let response = { err: false, msg: "Success", token: token };
-      res.status(200).send(response);
+  try {
+    let users = await prisma.users.findMany({
+      where: { username: username },
+    });
+    if (users.length === 0) {
+      res.status(400).send({ msg: "Username doesn't exist", err: true });
       return;
     } else {
-      res.status(400).send({ msg: "Wrong password", err: true });
-      return;
+      let compare = await bcrypt.compare(password, users[0].password);
+      if (compare) {
+        let token = generateAccessToken(username);
+        let response = { err: false, msg: "Success", token: token };
+        res.status(200).send(response);
+        return;
+      } else {
+        res.status(400).send({ msg: "Wrong password", err: true });
+        return;
+      }
     }
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ msg: err.message, err: true });
   }
 });
 
 //insert data user
 app.post("/register", async (req, res) => {
-  let { username, password } = req.body;
+  let { username, password, name } = req.body;
 
-  let salt = await bcrypt.genSalt(saltRounds);
-  let hash = await bcrypt.hash(password, salt);
-  // Store hash in your password DB.
-  await prisma.users.create({
-    data: {
-      username: username,
-      password: hash,
-    },
-  });
-  res.send({ err: false, msg: "Success" });
+  try {
+    let salt = await bcrypt.genSalt(saltRounds);
+    let hash = await bcrypt.hash(password, salt);
+    // Store hash in your password DB.
+    await prisma.users.create({
+      data: {
+        name: name,
+        username: username,
+        password: hash,
+      },
+    });
+    res.send({ err: false, msg: "Success" });
 
-  return;
-});
-
-app.post("/person/insert", authenticateToken, async (req, res) => {
-  await prisma.person.create({
-    data: {
-      last_name: req.body.lastName,
-      first_name: req.body.firstName,
-      address: req.body.address,
-      city: req.body.city,
-    },
-  });
-  res.send({ err: false, msg: "Success" });
-
-  return;
-});
-
-app.get("/persons", authenticateToken, async (req, res) => {
-  let limit = req.query.limit || 100;
-
-  let ret = await prisma.person.findMany({
-    take: limit,
-  });
-  return res.send({ err: false, msg: "Success", data: ret });
-});
-
-//get person data by id
-app.get("/person/:id", async (req, res) => {
-  let id = req.params.id;
-  let ret = await prisma.person.findUnique({
-    where: { id: id * 1 },
-  });
-  if (ret) {
-    return res.send({ err: false, msg: "Success", data: ret });
-  } else {
-    return res.send({ err: true, msg: "Data not found" });
+    return;
+  } catch (err) {
+    console.log(err);
+    res.status(400).send({ msg: "Invalid payload", err: true });
+    return;
   }
 });
 
-//update data person
-app.put("/update/:id", async (req, res) => {
-  let nomor = req.params.id;
-  let { lastName, firstName, Address, City } = req.body;
-
-  await prisma.person.update({
-    where: { id: nomor },
-    data: {
-      last_name: lastName,
-      first_mame: firstName,
-      address: Address,
-      city: City,
-    },
-  });
-  return res.send({ err: false, msg: "Success" });
+app.get("/books", authenticateToken, async (req, res) => {
+  let genre = req.query.genre;
+  let limit = req.query.limit;
+  let books;
+  if (genre && limit) {
+    books = await prisma.books.findMany({
+      where: { genre: genre },
+      take: limit * 1,
+      select: {
+        id: true,
+        title: true,
+        genre: true,
+        author: true,
+        year: true,
+      },
+    });
+  } else if (genre) {
+    books = await prisma.books.findMany({
+      where: { genre: genre },
+      select: {
+        id: true,
+        title: true,
+        genre: true,
+        author: true,
+        year: true,
+      },
+    });
+  } else if (limit) {
+    books = await prisma.books.findMany({
+      take: limit * 1,
+      select: {
+        id: true,
+        title: true,
+        genre: true,
+        author: true,
+        year: true,
+      },
+    });
+  } else {
+    books = await prisma.books.findMany({
+      select: {
+        id: true,
+        title: true,
+        genre: true,
+        author: true,
+        year: true,
+      },
+    });
+  }
+  res.send({ err: false, msg: "Success", books: books });
+  return;
 });
 
-app.delete("/delete/:id", async (req, res) => {
+app.post("/books", authenticateToken, async (req, res) => {
+  let { title, author, genre, year, publisher, synopsis, filepath } = req.body;
+  console.log(req.body);
+  try {
+    await prisma.books.create({
+      data: {
+        title: title,
+        author: author,
+        genre: genre,
+        year: year,
+        publisher: publisher,
+        synopsis: synopsis,
+        filepath: filepath,
+      },
+    });
+    res.send({ err: false, msg: "Success" });
+  } catch (err) {
+    console.log(err);
+    res.status(400).send({ msg: "Invalid payload", err: true });
+    return;
+  }
+});
+
+app.get("/books/:id", authenticateToken, async (req, res) => {
+  //get book detail
   let id = req.params.id;
-
-  await prisma.person.delete({
-    where: { id: id },
+  let book = await prisma.books.findUnique({
+    where: {
+      id: id * 1,
+    },
+    select: {
+      id: true,
+      title: true,
+      genre: true,
+      author: true,
+      year: true,
+      publisher: true,
+      synopsis: true,
+    },
   });
+  res.send({ err: false, msg: "Success", book: book });
+});
 
-  return res.send({ err: false, msg: "Success" });
+app.post("/borrow/:userid/:bookid", authenticateToken, async (req, res) => {
+  let userid = req.params.userid;
+  let bookid = req.params.bookid;
+  await prisma.user_history.create({
+    data: {
+      users: {
+        connect: {
+          id: userid * 1,
+        },
+      },
+      books: {
+        connect: {
+          id: bookid * 1,
+        },
+      },
+      start_time: new Date(),
+      status: "borrowed",
+    },
+  });
+  res.send({ err: false, msg: "Success" });
+});
+
+app.get("/borrow/history/:userid", authenticateToken, async (req, res) => {
+  let userid = req.params.userid;
+  let history = await prisma.user_history.findMany({
+    where: {
+      users: {
+        id: userid * 1,
+      },
+    },
+    select: {
+      id: true,
+      books: {
+        select: {
+          id: true,
+          title: true,
+          author: true,
+          genre: true,
+          year: true,
+        },
+      },
+      start_time: true,
+      end_time: true,
+      status: true,
+    },
+  });
+  res.send({ err: false, msg: "Success", history: history });
+});
+
+app.post("/return/:borrowid", authenticateToken, async (req, res) => {
+  let borrowid = req.params.borrowid;
+  await prisma.user_history.update({
+    where: {
+      id: borrowid * 1,
+    },
+    data: {
+      end_time: new Date(),
+      status: "returned",
+    },
+  });
+  res.send({ err: false, msg: "Success" });
+});
+
+app.get("/borrow/:userid/now", authenticateToken, async (req, res) => {
+  //get list of currently borrowed book
+  let userid = req.params.userid;
+  let history = await prisma.user_history.findMany({
+    where: {
+      users: {
+        id: userid * 1,
+      },
+      status: "borrowed",
+    },
+    select: {
+      id: true,
+      books: {
+        select: {
+          id: true,
+          title: true,
+          author: true,
+          genre: true,
+          year: true,
+        },
+      },
+      start_time: true,
+      status: true,
+    },
+  });
+  res.send({ err: false, msg: "Success", books: history });
+});
+
+app.get("/download/:bookid", authenticateToken, async (req, res) => {
+  let bookid = req.params.bookid;
+  try {
+    let book = await prisma.books.findUnique({
+      where: {
+        id: bookid * 1,
+      },
+      select: {
+        filepath: true,
+      },
+    });
+    const filePath = path.join(__dirname, "./data/");
+    res.sendFile(filePath + book.filepath);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ msg: "Error getting file", err: true });
+    return;
+  }
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on http://localhost:${port}`);
+  console.log(`Library API listening on http://localhost:${port}`);
 });

@@ -3,30 +3,40 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-model orders {
-  id           Int    @id @default(autoincrement())
-  order_number Int
-  person_id    Int
-  person       person @relation(fields: [person_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "orders_ibfk_1")
-
-  @@index([person_id], map: "person_id")
-}
-
-model person {
-  id         Int      @id @default(autoincrement())
-  last_name  String?  @db.VarChar(255)
-  first_name String?  @db.VarChar(255)
-  address    String?  @db.VarChar(255)
-  city       String?  @db.VarChar(255)
-  orders     orders[]
-}
-
 model users {
-  id       Int     @id @default(autoincrement())
-  username String? @db.VarChar(255)
-  password String? @db.VarChar(255)
+  id           Int            @id @default(autoincrement())
+  name         String         @db.VarChar(255)
+  username     String         @unique(map: "username") @db.VarChar(255)
+  password     String         @db.VarChar(255)
+  user_history user_history[]
+}
+
+model books {
+  id           Int            @id @default(autoincrement())
+  title        String         @db.VarChar(255)
+  author       String         @db.VarChar(255)
+  genre        String         @db.VarChar(255)
+  year         Int
+  publisher    String         @db.VarChar(255)
+  synopsis     String         @db.Text
+  filepath     String?        @db.Text
+  user_history user_history[]
+}
+
+model user_history {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  book_id    Int
+  start_time DateTime  @db.DateTime(0)
+  end_time   DateTime? @db.DateTime(0)
+  status     String    @db.VarChar(30)
+  books      books     @relation(fields: [book_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "user_history_ibfk_2")
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "user_history_ibfk_1")
+
+  @@index([book_id], map: "book_id")
+  @@index([user_id], map: "user_id")
 }
